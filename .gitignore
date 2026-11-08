@@ -2,3 +2,6 @@
 *.bin
 output/
 
+
+# 临时备份目录
+.backup-*/
