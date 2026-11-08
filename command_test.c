@@ -1,26 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>
-
-int check_command(uint8_t *buf, uint16_t len)
-{
-    // 在这里检查 buf 是否为空、len 是否小于 3
-    if (buf == NULL || len < 3)
-    {
-        return 0; // 错误码，表示输入无效
-    }
-
-    if (buf[0] == 0xAA && buf[1] == 0x01 && buf[2] == 0x55)
-    {
-        return 1; // 命令有效
-    }
-       
-    if (buf[0] == 0xAA && buf[1] == 0x02 && buf[2] == 0x55)
-    {
-        return 2; // 命令有效
-    }
-    return 0;
-}
+#include "command.h"
 
 int main(void)
 {
@@ -39,7 +20,7 @@ int main(void)
     for(size_t i = 0; i < sizeof(commands) / sizeof(commands[0]); i++)
     {
         result = check_command(commands[i], 3);
-        printf("Result %zu: %d", i + 1, result);
+        printf("Result %u: %d", (unsigned)(i + 1), result);
         if (result == expected[i])
         {
             printf(" pass\n");

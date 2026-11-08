@@ -22,7 +22,7 @@ int main(void)
     for(size_t i=0; i < sizeof(tests)/sizeof(tests[0]); i++)
     {
         int result =check_command(tests[i].command, sizeof(tests[i].command) / sizeof(tests[i].command[0]));
-        printf("Test %zu: Expected=%d Actual=%d ", i+1, tests[i].expected, result);
+        printf("Test %u: Expected=%d Actual=%d ", (unsigned)(i+1), tests[i].expected, result);
         
         if(result == tests[i].expected)
         {
@@ -53,7 +53,7 @@ int main(void)
     {
         printf("两个字节的数组测试 fail\n");
     }
-    //printf("\n\nSummary : %zu/%zu passed\n", x, sizeof(tests)/sizeof(tests[0]));
+    printf("\n\nSummary : %u/%u passed\n", (unsigned)x, (unsigned)(sizeof(tests)/sizeof(tests[0])));
     if (x == sizeof(tests)/sizeof(tests[0]))
     {
         printf("Press Enter to exit...\n");
