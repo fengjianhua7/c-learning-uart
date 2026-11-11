@@ -5,3 +5,6 @@ output/
 
 # 临时备份目录
 .backup-*/
+
+# Agent 记忆目录（本地工具产物，不属于学习工程）
+.workbuddy/
