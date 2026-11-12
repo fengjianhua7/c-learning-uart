@@ -1,27 +1,32 @@
 #include <stdio.h>
 #include <stdint.h>
 #include "command.h"
-
-
+#include "uart_rx.h"
 
 int main(void)
 {
-uint8_t received[3] = {0xAA, 0x09, 0x55};
-uint8_t buffer[3] = {0};
-size_t count = 0;
-for (size_t i = 0; i < sizeof(received) / sizeof(received[0]); i++)
-{
-    if (count < sizeof(buffer) / sizeof(buffer[0]))          // ① 容量上限，用 sizeof 表达，不要写 3
+    // 切换用例时只改这一行
+    uint8_t received[] = {0xAA, 0xAA, 0x01, 0x55};
+    // uint8_t received[] = {0xAA, 0x01, 0x55, 0xAA, 0x02, 0x55};
+    // uint8_t received[] = {0xAA, 0x01, 0xAA, 0x02, 0x55, 0x55};
+    // uint8_t received[] = {0x55, 0xAA, 0x01, 0x55};
+    // uint8_t received[] = {0xAA, 0xAA, 0x55};
+    // uint8_t received[] = {0xAA, 0xAA, 0xAA, 0x55};
+
+    uart_rx_t rx;
+    uart_rx_init(&rx); // 一次初始化：接收状态 + 错误统计都归零
+
+    for (size_t i = 0; i < sizeof(received) / sizeof(received[0]); i++)
     {
-        buffer[count] = received[i];   // ② 该写哪一格？
-        count++;                        // ③ 数量怎么变？
-        printf("Received: %zu bytes\n", count);  // ④ 打印谁？
-        if(count==3){
+        if (uart_rx_feed_byte(&rx, received[i]))
+        {
             printf("Frame complete\n");
-            int result = check_command(buffer, count);
+            int result = check_command(rx.buffer, rx.count);
             printf("Command: %d\n", result);
+            uart_rx_reset(&rx); // 只复位接收状态，err_count 保留继续累计
         }
     }
-}
+    printf("final count: %zu, errors: %u\n", rx.count, rx.err_count);
 
+    return 0;
 }
