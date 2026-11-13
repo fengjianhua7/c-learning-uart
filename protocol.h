@@ -37,4 +37,4 @@
 #define CMD_VOL_ARG_LEN 1
 #define CMD_TOUCH_ARG_LEN 4
 
-#endif
+#endif /* PROTOCOL_H */

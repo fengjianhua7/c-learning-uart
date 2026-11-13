@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include "command.h"
 #include "uart_rx.h"
+#include "app.h"
 
 int main(void)
 {
@@ -29,12 +30,17 @@ int main(void)
             if (command_parse(rx.buffer, rx.count, &cmd))
             {
                 printf("cmd=%02X data_len=%zu\n", cmd.cmd, cmd.data_len);
+                app_handle(&cmd);
+            }
+            else
+            {
+                printf("parse failed\n");
             }
             uart_rx_reset(&rx);
         }
     }
 
-    // printf("final count: %zu, errors: %u\n", rx.count, rx.err_count);
+    printf("final count: %zu, errors: %u\n", rx.count, rx.err_count);
 
     return 0;
 }

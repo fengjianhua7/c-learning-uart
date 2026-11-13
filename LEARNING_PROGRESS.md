@@ -313,3 +313,32 @@
   `protocol.h` 里 `CMD_VOL_ARG_LEN` / `CMD_TOUCH_ARG_LEN` 尚未被使用。
 - 下一项任务：35D——应用层分发（`switch (cmd.cmd)` + 参数长度校验 + 大端转 `uint16_t`，
   触摸坐标 `01 2C 00 64` → `(300, 100)`）；之后是第 36 课接收超时（timeout）。
+
+### 学习记录 #35D · 应用层分发与端序（2026-11-13）
+
+- 内容：应用层（application layer）、命令分发、参数语义校验、大端（big-endian）解析。
+- 实际完成：
+  - 新增 `app.h` / `app.c`：`int app_handle(const command_t *cmd)`，
+    内部 `switch (cmd->cmd)` 分发，无参命令六个 `case` 合并共用一条校验 + 一个动作分支。
+  - 辅助函数 `read_be16`（大端拼字节）与 `name_of`（命令码转名字，供打印）。
+  - 参数语义校验按命令逐个做：无参命令必须 `data_len == 0`，
+    `CMD_VOL` 必须 `== CMD_VOL_ARG_LEN`，`CMD_TOUCH` 必须 `== CMD_TOUCH_ARG_LEN`。
+  - 九帧端到端（正常 4 + 语义非法 5）全部符合预期，`frames=9 errors=0`，零警告。
+- 掌握等级：应用层分发 **L3**；参数语义校验 **L3**；端序处理 **L3**
+  （一次写对 `read_be16` 调用与偏移）。
+- 错误与薄弱点：
+  - 留 TODO 未实现 `CMD_TOUCH` 时，`read_be16` 无人调用 → `-Werror=unused-function`
+    直接编译失败。严格编译不允许“以后会用到”的死代码。
+  - `case CMD_TOUCH:` 缩进比同级其它 `case` 多 3 格（纯风格问题）。
+- 概念收获：
+  - 三层职责：接收层管“是不是一帧”，解析层管“帧格式是否自洽”，应用层管“这条命令合不合法”。
+    九帧测试里后五条都是 `parse ok` + `[reject]`，正好体现分工。
+  - 协议规定大端，STM32 是小端 CPU：**不能用 `*(uint16_t *)p` 强转**，
+    既会读反，又可能因地址未对齐在 Cortex-M0 上触发 HardFault。
+    逐字节拼接 `(p[0] << 8) | p[1]` 与 CPU 端序无关。
+  - C 的 `case` 标签后不能直接跟变量声明，需用 `{ }` 把分支包成一块。
+  - 端序错误不报错、只出错值：`&data[1]` 读出的 `2C 00` 是 11264 而非 100。
+- 待清理（技术债）：`uart_rx.c` 尾部旧 if 链注释；`command.h` 的 `check_command`；
+  `tasks.json` 的练习构建任务尚未包含 `app.c`（当前只能命令行手动加）。
+- 下一项任务：第 36 课——接收超时（timeout）：半帧断流时如何复位、定时器如何配合；
+  之后是把三层接到 STM32 的 UART 中断上。

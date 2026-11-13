@@ -22,4 +22,4 @@ int command_parse(const uint8_t *buf, size_t len, command_t *out);
 /* ---- 以下为旧的三字节协议（AA CMD 55），仅供 main.c 使用，待淘汰 ---- */
 int check_command(uint8_t *buf, uint16_t len);
 
-#endif
+#endif /* COMMAND_H */

@@ -1,6 +1,5 @@
 #include "uart_rx.h"
 
-
 void uart_rx_reset(uart_rx_t *ctx)
 {
     ctx->count = 0;
@@ -28,8 +27,7 @@ int uart_rx_feed_byte(uart_rx_t *ctx, uint8_t byte)
         switch (ctx->state)
         {
         case RX_WAIT_HEADER:
-            /* 是 RX_HEADER：存 buffer[0]、count=1、state 切到 RX_WAIT_LEN
-               不是：什么都不做 */
+            /* 只有 RX_HEADER 才开帧；其它字节直接丢弃（不写 buffer、不改 state）。 */
             if (byte == RX_HEADER)
             {
                 ctx->buffer[0] = byte;
@@ -40,9 +38,9 @@ int uart_rx_feed_byte(uart_rx_t *ctx, uint8_t byte)
             break;
 
         case RX_WAIT_LEN:
-            /* 这个字节就是整帧长度，先校验 RX_MIN_LEN <= byte <= RX_BUF_SIZE
-               合法：len = byte、存 buffer[1]、count=2、state 切到 RX_WAIT_CMD
-               非法：count=0、err_count++、state 回 RX_WAIT_HEADER */
+            /* 长度字段是外部输入，必须先做范围校验再采信：
+               RX_MIN_LEN <= byte <= RX_BUF_SIZE 才算合法，否则后面写 buffer 会越界。
+               非法时这个字节也可能是新帧的帧头，交回帧头状态重判。 */
             if (byte >= RX_MIN_LEN && byte <= RX_BUF_SIZE)
             {
                 ctx->len = byte;

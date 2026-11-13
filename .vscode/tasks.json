@@ -15,6 +15,7 @@
                 "${workspaceFolder}\\uart_rx_test.c",
                 "${workspaceFolder}\\uart_rx.c",
                 "${workspaceFolder}\\command.c",
+                "${workspaceFolder}\\app.c",
                 "-o",
                 "${workspaceFolder}\\uart_rx_test.exe"
             ],
@@ -28,7 +29,7 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "detail": "编译 UART 接收练习：uart_rx_test.c + uart_rx.c + command.c"
+            "detail": "编译 UART 接收练习：uart_rx_test.c + uart_rx.c + command.c + app.c"
         },
         {
             "type": "cppbuild",
