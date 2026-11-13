@@ -244,3 +244,72 @@
   - 模块必须自己保证对象任何时刻状态合法，不能依赖调用方补一行来擦屁股。
 - 下一项任务：第 35 课——变长帧（长度字段）与协议健壮性取舍；
   以及 `uart_rx.h` 注释风格统一、`count`→`enum` 何时才值得（结论：变长帧时必须）。
+
+### 学习记录 #35B · 状态机接收变长帧（2026-11-13）
+
+- 内容：`switch` 状态机、`enum` 具名状态、变长帧（长度字段）、帧尾重同步（resynchronization）。
+- 实际完成：
+  - `uart_rx_reset` 增加 `ctx->state = RX_WAIT_HEADER`；`uart_rx_init` 收敛为两句
+    （`reset` + `err_count` 归零），buffer 循环改用 `RX_BUF_SIZE`。
+  - `uart_rx_feed_byte` 由 if 链改写为五状态 `switch`：
+    `RX_WAIT_HEADER / LEN / CMD / DATA / TAIL`，外层 `while (retry)` 支持"同一字节重判"。
+  - 十个用例（无参 / 单参 / 四参 / 非法 LEN / 前导垃圾 / 完整帧 / 坏帧尾 / 两帧连发 /
+    坏尾后重同步 / 单帧头恢复）全部符合预期，`-Wall -Wextra -Werror` 零警告。
+- 掌握等级：状态机建模 **L3**；变长帧组帧 **L3**；重同步策略 **L2**
+  （帧尾重判要提示，`LEN` 位也需重判则完全没想到）。
+- 错误与薄弱点：
+  - 把 `reset` 里的 `ctx->state` 注释掉、改在 `main` 里手动补 —— 与 #34B 完全同类：
+    模块职责外推给调用方。关键区分：`count/buffer/state` 属"每帧必清"，
+    `err_count` 属"跨帧累积"，两者不能一起被注释掉。
+  - `uart_rx_init` 里把 `reset` 干过的事又抄一遍（重复代码，改一处忘一处）。
+  - 观测用的 `printf` 写进 `if (uart_rx_feed_byte(...))` 块内：不成帧时一行都不打；
+    同时把有副作用的调用塞进 `if` 条件，返回值就再也拿不到了。
+  - `ctx->count++` 在 `TAIL` 里依赖"进来时正好是 len-1"这个隐式契约，改为 `= ctx->len`。
+  - `retry` 只加在帧尾失败处，导致用例 J 回归（坏尾 `AA` 抢占帧头，真帧头撞到 LEN 位）；
+    补上 `LEN` 非法分支的 `retry = 1` 后修复。`K` 通过 ≠ `J` 没坏。
+- 概念收获：
+  - 状态机 = 用 `state` 显式记录"我在等什么"，取代"用 `count` 反推位置"；
+    每个 `case` 只回答三件事：存不存、`count` 变不变、切到哪个状态。
+  - `len == RX_MIN_LEN` 时命令码后直接是帧尾；`count == len - 1` 是两处分流共用的唯一判据。
+  - 重同步统一规则：**当前位置不可能容纳这个字节，就把它当可能的帧头重判一次**。
+  - 修 bug 必然引入回归风险；用例集的价值就是在改完那一刻把退化抓出来。
+- 待清理（技术债）：`uart_rx.c` 尾部约 45 行旧 if 链注释可删；`RX_FRAME_LEN` 已无人使用；
+  `uart_rx.h` 第 11 行"使用按大端解析"语序错；`command.h` 的 `check_command`
+  仍是旧协议（`AA CMD 55`），与 `AA LEN CMD DATA FF` 不兼容。
+- 下一项任务：35C——按新帧格式重写命令解析（命令码 + 参数），决定 `check_command` 去留；
+  之后是第 36 课接收超时（timeout）。
+
+### 学习记录 #35C · 解析层与协议定义抽取（2026-11-13）
+
+- 内容：解析层（parse layer）、结构体出参、格式交叉校验、共享协议头的抽取。
+- 实际完成：
+  - 新建 `protocol.h`：帧格式（`RX_HEADER/RX_TAIL/RX_MIN_LEN/RX_BUF_SIZE`）、
+    每帧开销 `CMD_FRAME_OVERHEAD`、参数上限 `CMD_DATA_MAX`、命令码与参数长度宏，
+    全部集中一处；`uart_rx.h` 与 `command.h` 各自 include，命令码宏从接收层移出。
+  - `command.h`：新增 `command_t {cmd, data[12], data_len}` 与 `command_parse`；
+    `check_command` 保留并标注"旧三字节协议，待淘汰"（`main.c` 还在用）。
+  - `command_parse` 实现完成：三层防御（空指针 / 长度下限 / 长度上限）+
+    格式三验（帧头、帧尾、`buf[1] == len`）+ 参数长度上限 + 字段拆分。
+  - 十条直接解析用例 + 四条端到端用例（字节流→成帧→解析，含前导垃圾）全通过，零警告。
+- 掌握等级：解析层实现 **L3**（一次改对，逻辑完整，防御齐全）。
+- 错误与薄弱点（全部是语法/语言细节，非设计问题）：
+  - 自造宏名 `CMD_MIN_LEN` / `CMD_MAX_LEN`（实际为 `RX_MIN_LEN` / `RX_BUF_SIZE`）。
+  - `buf[1] = len` 把比较写成赋值；因 `buf` 是 `const`，编译器报
+    `assignment of read-only location`。
+  - `if (size_t n = ...)` 是 C++ 写法，C 不允许在 `if` 条件内声明变量；
+    且即使能编译，`n` 的作用域只到括号结束，后面用不了。
+  - `size_t n = len - CMD_FRAME_OVERHEAD && n > CMD_DATA_MAX`：`&&` 优先级高于 `=`，
+    实际变成给 `n` 赋一个布尔值；拆成"声明"和"判断"两句后自动消失。
+  - 未意识到 `size_t` 减法下溢（underflow）：`len < 4` 时 `len - 4` 会绕成极大值。
+    本次被后面的上限检查兜住，属侥幸。
+- 概念收获：
+  - 分层防御：接收层已保证帧合法，解析层仍要自己校验一遍 —— 因为它可能被别人调用，
+    不能把正确性寄托在调用方身上。成本是三次比较。
+  - 自描述帧的价值：长度字段可以交叉验证（`buf[1]` 与实参 `len`），不一致即判坏帧。
+  - 参数必须复制进 `out->data`，不能外借 `rx.buffer` 的指针 —— buffer 会被下一次接收覆盖。
+  - `sizeof(command_t) = 20`（1 + 12 + 3 字节填充 + 4），对齐规则再次出现。
+  - **一行只干一件事**，能同时消灭优先级错误和作用域错误。
+- 待清理（技术债）：`uart_rx.c` 尾部旧 if 链注释；`command.h` 的 `check_command`；
+  `protocol.h` 里 `CMD_VOL_ARG_LEN` / `CMD_TOUCH_ARG_LEN` 尚未被使用。
+- 下一项任务：35D——应用层分发（`switch (cmd.cmd)` + 参数长度校验 + 大端转 `uint16_t`，
+  触摸坐标 `01 2C 00 64` → `(300, 100)`）；之后是第 36 课接收超时（timeout）。
